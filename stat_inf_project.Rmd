@@ -1,0 +1,175 @@
+---
+title: "Statistical inference with the GSS data"
+author : "Emanuele Messori"
+date : 2020-08-17
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+
+```
+
+### Load data
+
+
+```{r load-data}
+load("gss.Rdata")
+```
+
+
+
+* * *
+
+## 1. Data
+
+### 1.1 What is the GSS ?
+
+> "Since 1972, the General Social Survey (GSS) has been monitoring societal change and studying the growing complexity of American society.
+
+> The GSS aims to gather data on contemporary American society in order to monitor and explain trends and constants in attitudes, behaviors, and attributes; to examine the structure and functioning of society in general as well as the role played by relevant subgroups; to compare the United States to other societies in order to place American society in comparative perspective and develop cross-national models of human society; and to make high-quality data easily accessible to scholars, students, policy makers, and others, with minimal cost and waiting.
+
+> GSS questions include such items as national spending priorities, marijuana use, crime and punishment, race relations, quality of life, and confidence in institutions. Since 1988, the GSS has also collected data on sexual behavior including number of sex partners, frequency of intercourse, extramarital relationships, and sex with prostitutes."
+
+Source : <https://www.norc.org/Research/Projects/Pages/general-social-survey.aspx>
+
+### 1.2 Methodology
+
+> "The target population of the GSS is adults (18+) living in households in the United States. The GSS sample is drawn using an area probability design that randomly selects respondents in households across the United States to take part in the survey. Respondents that become part of the GSS sample are from a mix of urban, suburban, and rural geographic areas. Participation in the study is strictly voluntary. However, because only about a few thousand respondents are interviewed in the main study, every respondent selected is very important to the results.
+
+> The survey is conducted face-to-face with an in-person interview by NORC at the University of Chicago. The survey was conducted every year from 1972 to 1994 (except in 1979, 1981, and 1992). Since 1994, it has been conducted every other year. The survey takes about 90 minutes to administer. As of 2014, 30 national samples with 59,599 respondents and 5,900+ variables have been collected."
+
+Source : <https://en.wikipedia.org/wiki/General_Social_Survey#Methodology>
+
+The samples are randomly selected from a population of adults and the information is collected through face-to-face interviews.This is an observational study, using very large random samples: the sample statistics will permit to draw conclusions about the population parameters, but not to infer causation between the variables.The data is collected as not to cause interference on how the data arises(contrary to a randomized experiment). (see OS3, 1.3.5).
+Over the years, the sampling procedure has apparently evolved from the original form of 1972-1974 to a more advanced and reliable one. For more information on sampling design, see the [GSS codebook, appendix A.](http://gss.norc.org/documents/codebook/GSS_Codebook_AppendixA.pdf)
+
+
+### 1.3 About this data set
+
+> "The General Social Surveys (GSS) were designed as part of a data diffusion project in 1972. The GSS replicated questionnaire items and wording in order to facilitate time-trend studies. The latest survey, GSS 2012, includes a cumulative file that merges all 29 General Social Surveys into a single file containing data from 1972 to 2012. The items appearing in the surveys are one of three types: Permanent questions that occur on each survey, rotating questions that appear on two out of every three surveys (1973, 1974, and 1976, or 1973, 1975, and 1976), and a few occasional questions such as split ballot experiments that occur in a single survey. The 2012 surveys included seven topic modules: Jewish identity, generosity, workplace violence, science, skin tone, and modules for experimental and miscellaneous questions. The International Social Survey Program (ISSP) module included in the 2012 survey was gender. The data also contain several variables describing the demographic characteristics of the respondents."
+
+Source: [General Social Survey, 1972-2012 (Cumulative File) (ICPSR 34802)](https://www.icpsr.umich.edu/web/ICPSR/studies/34802/versions/V1)
+
+
+The dataset hereby used is a simplified version of the cumulative  GSS, with "removed missing values from the responses and created factor variables when appropriate to facilitate analysis using R."
+
+* * *
+
+## Part 2: Research question
+
+We are interested in the possible association between gun ownership and income. For this reason, we create two subsets of the gss dataset:
+
+```{r}
+gincome <- subset(gss, owngun =="Yes")$coninc
+ngincome <- subset(gss, owngun == "No")$coninc
+summary(gincome)
+hist(gincome)
+summary(ngincome)
+hist(ngincome)
+```
+
+As we can see, the two distribution are right skewed, but the ```gincome``` mean value is noticeably higher than the ```ngincome``` one.
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+First we clean the data for our analysis. We consider the ```owngun``` variable with only two levels, "Yes" or "No", dropping the "Refused" and NA levels of the variable class:
+
+```{r}
+gss1 <- subset(gss, owngun != "Refused" & !is.na(class))
+gss2 <- droplevels.data.frame(gss1)
+gss2$class <- factor(gss2$class, exclude = 'No Class')
+```
+
+Let's explore with some graphs this possible relationship:
+
+```{r}
+plot(gss2$owngun ~ gss2$coninc, xlab = "Income", ylab= "Gun Ownership")
+gss2%>%filter(!is.na(class)) %>% ggplot(aes(x =class, fill = owngun)) + geom_bar(position = 'fill')
+ggplot(gss2, aes(owngun, coninc)) +
+  geom_boxplot()+xlab("Gunowners")+ylab("Income")+labs(title = "Income comparison")
+```
+
+We notice a clear upward tendency in the proportion of gun owners as the income increases followed by a slight decrease. We notice also from the boxplot that the mean income of gun owners is higher than the income of people who do not own guns. Is this difference statistically significant?
+
+* * *
+
+## Part 4: Inference
+
+### Conditions for inference :
+
+We check the two conditions necessary to apply the t-distribution to the
+difference in sample means. (1) Because the data come from a simple random
+sample and consist of less than 10% of all such cases, the observations are
+independent. Additionally, while each distribution is strongly skewed, the large
+sample sizes are enough compensation to model each mean separately using a t-distribution.  (2) The independence reasoning applied in (1) also
+ensures the observations in each sample are independent. Since both conditions
+are satisfied, the difference in sample means may be modeled using a
+t-distribution.  
+
+
+### Dependency
+
+We can elucidate this relationship of dependency with a chi-square test. We use the categorical variable ```income06```,  equivalent of ```coninc```, as the explanatory variable. Conditions are fulfilled :
+
+* **Independence** . Each case that contributes a count to the table must be independent of all the other cases in the table.
+* **Sample size / distribution** . Each particular scenario (i.e. cell count) must have at least 5 expected cases.
+
+```{r}
+inference(y = owngun, x= income06, data = gss2, statistic = "proportion", success = "Yes",type = "ht", method = "theoretical")
+
+
+```
+
+The p-value is practically 0 so the income and the gun ownership are definitely dependent. 
+Next, we are ready for our inference for the difference of two means, considering first if the conditions necessary to apply the t-distribution are fulfilled :
+
+1. Because the data come from a simple random
+sample and consist of less than 10% of all such cases, the observations are
+independent. Additionally, while each distribution is strongly skewed, the large
+sample sizes are enough compensation to model each mean
+separately using a t-distribution.  
+2. The independence reasoning applied in (1) also
+ensures the observations in each sample are independent. Since both conditions
+are satisfied, the difference in sample means may be modeled using a
+t-distribution.
+
+```{r}
+inference(y = coninc, x = owngun, data = gss2, statistic = "mean", 
+          type = "ht", null = 0, alternative = "twosided", method = "theoretical")
+```
+
+
+As the p-value is lower than 0.0001, we reject the $H_{0}$ . There is indeed a statistical significant difference between the average income of gun-owners and non-owners.
+
+```{r}
+inference(y = coninc, x = owngun, data = gss2, statistic = "mean", 
+          type = "ci",method = "theoretical")
+```
+
+We are 95% confident that the annual average income of guns' owners is
+8213.4551 to 9819.5637 dollars higher than the average income of people who do not own guns.
+
+
+
+
+
+
+
+
+
+
+
+
